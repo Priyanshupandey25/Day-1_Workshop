@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Research Paper Assistant</title>
+    <style>
+        :root {
+            --bg-color: #f8f9fc;
+            --sidebar-bg: #15192c;
+            --sidebar-text: #e7e9f5;
+            --sidebar-input: #232a45;
+            --card-bg: #ffffff;
+            --text-main: #1f2a44;
+            --border-color: #e2e5ee;
+            --primary: #4f6df5;
+            --primary-hover: #7c5cff;
+            --success: #1fae6e;
+            --pending: #b3b8c5;
+        }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; padding: 0; background: linear-gradient(135deg, #f8f9fc 0%, #eef1f8 100%); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar */
+        .sidebar { width: 300px; background: var(--sidebar-bg); color: var(--sidebar-text); padding: 20px; overflow-y: auto; flex-shrink: 0; }
+        .sidebar h3 { color: #fff; margin-top: 0; font-size: 1.1rem; border-bottom: 1px solid #2a3253; padding-bottom: 10px; }
+        .sidebar label { display: block; margin-top: 15px; margin-bottom: 5px; font-size: 0.9rem; }
+        .sidebar input, .sidebar select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #3b4465; background: var(--sidebar-input); color: #fff; }
+        .sidebar .author-list { margin-top: 10px; }
+        .sidebar .author-item { display: flex; justify-content: space-between; background: #232a45; padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 0.85rem; }
+        .sidebar .author-item button { background: transparent; border: none; color: #ff5c5c; cursor: pointer; }
+        .progress-container { margin-top: 20px; }
+        .progress-bar { width: 100%; background: #232a45; border-radius: 10px; height: 8px; margin-bottom: 10px; }
+        .progress-fill { height: 100%; background: var(--primary); border-radius: 10px; width: 0%; transition: 0.3s; }
+        .progress-item { font-size: 0.85rem; margin-bottom: 4px; }
+        .progress-item.done { color: var(--success); font-weight: bold; }
+        .progress-item.pending { color: var(--pending); }
+
+        /* Main Content */
+        .main { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .header { background: linear-gradient(120deg, #4f6df5 0%, #7c5cff 100%); padding: 20px 30px; color: white; box-shadow: 0 4px 12px rgba(79,109,245,0.2); }
+        .header h1 { margin: 0; font-size: 1.8rem; }
+        .header p { margin: 5px 0 0 0; opacity: 0.9; }
+        
+        .tabs { display: flex; background: #fff; border-bottom: 1px solid var(--border-color); overflow-x: auto; padding: 0 20px; }
+        .tab { padding: 15px 20px; cursor: pointer; font-weight: 600; color: #6b7280; border-bottom: 3px solid transparent; white-space: nowrap; }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        
+        .content { flex-grow: 1; padding: 30px; overflow-y: auto; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* Components */
+        .card { background: var(--card-bg); border-radius: 12px; padding: 20px; box-shadow: 0 4px 18px rgba(31,42,68,0.04); border: 1px solid var(--border-color); margin-bottom: 20px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+        
+        label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.9rem; }
+        input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.95rem; margin-bottom: 15px; }
+        textarea { resize: vertical; min-height: 120px; }
+        
+        button { background: linear-gradient(120deg, #4f6df5, #7c5cff); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 0.95rem; }
+        button:hover { box-shadow: 0 4px 14px rgba(79,109,245,0.4); transform: translateY(-1px); }
+        button.secondary { background: #eef1ff; color: var(--primary); box-shadow: none; }
+        button.secondary:hover { background: #e2e8ff; transform: none; box-shadow: none; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        
+        .pill { display: inline-block; background: #eef1ff; color: var(--primary); padding: 4px 12px; border-radius: 99px; font-size: 0.8rem; font-weight: 600; margin-right: 8px; margin-bottom: 8px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { border: 1px solid var(--border-color); padding: 10px; text-align: left; font-size: 0.9rem; }
+        th { background: #f8f9fc; font-weight: 600; }
+        td input { margin-bottom: 0; padding: 6px; }
+
+        .spinner { display: none; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; vertical-align: middle; margin-left: 8px; }
+        .spinner.dark { border: 3px solid rgba(79,109,245,0.3); border-top-color: var(--primary); }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h3>📋 Project Information</h3>
+    <label>Project Title</label>
+    <input type="text" id="p_title" onchange="updateState('title', this.value)">
+    
+    <label>Domain</label>
+    <input type="text" id="p_domain" onchange="updateState('domain', this.value)">
+    
+    <label>Keywords (comma separated)</label>
+    <input type="text" id="p_keywords" onchange="updateState('keywords', this.value.split(',').map(s=>s.trim()))">
+    
+    <label>Research Type</label>
+    <select id="p_rtype" onchange="updateState('research_type', this.value)">
+        <option>Survey</option><option>Experimental</option><option>Review</option><option>Case Study</option><option>Comparative Analysis</option>
+    </select>
+
+    <h3 style="margin-top:25px;">📄 Paper Format</h3>
+    <label>Paper Type</label>
+    <select id="p_journal" onchange="updateState('journal', this.value)">
+        <option>IEEE</option><option>Springer</option><option>ACM</option><option>Elsevier</option>
+    </select>
+    
+    <label>Citation Style</label>
+    <select id="p_citation" onchange="updateState('citation_style', this.value)">
+        <option>IEEE</option><option>APA</option><option>MLA</option><option>Chicago</option>
+    </select>
+
+    <h3 style="margin-top:25px;">👥 Authors</h3>
+    <div style="background: #232a45; padding: 10px; border-radius: 8px; margin-bottom: 10px;">
+        <input type="text" id="a_name" placeholder="Name" style="margin-bottom: 5px;">
+        <input type="text" id="a_aff" placeholder="Affiliation" style="margin-bottom: 5px;">
+        <button onclick="addAuthor()" style="width:100%; padding: 6px;">Add Author</button>
+    </div>
+    <div id="author_list" class="author-list"></div>
+
+    <h3 style="margin-top:25px;">📈 Progress</h3>
+    <div class="progress-container">
+        <div class="progress-bar"><div class="progress-fill" id="progress_fill"></div></div>
+        <div id="progress_text" style="font-size: 0.8rem; margin-bottom: 10px; opacity: 0.8;">0 / 8 sections complete</div>
+        <div id="progress_list"></div>
+    </div>
+</div>
+
+<div class="main">
+    <div class="header">
+        <h1>📚 AI Research Paper Assistant</h1>
+        <p>Guided, fact-grounded paper writing for first-time researchers — step by step.</p>
+    </div>
+    
+    <div class="tabs" id="tabs">
+        <div class="tab active" onclick="switchTab(1)">1️⃣ Topic</div>
+        <div class="tab" onclick="switchTab(2)">2️⃣ References</div>
+        <div class="tab" onclick="switchTab(3)">3️⃣ Lit. Review</div>
+        <div class="tab" onclick="switchTab(4)">4️⃣ Outline</div>
+        <div class="tab" onclick="switchTab(5)">5️⃣ Intro</div>
+        <div class="tab" onclick="switchTab(6)">6️⃣ Methodology</div>
+        <div class="tab" onclick="switchTab(7)">7️⃣ Experiments</div>
+        <div class="tab" onclick="switchTab(8)">8️⃣ Results</div>
+        <div class="tab" onclick="switchTab(9)">9️⃣ Conclusion</div>
+        <div class="tab" onclick="switchTab(10)">🔟 Abstract</div>
+        <div class="tab" onclick="switchTab(11)">📦 Export</div>
+    </div>
+
+    <div class="content">
+        <div class="tab-content active" id="tab1">
+            <h2>Topic Generator</h2>
+            <div class="card grid-2">
+                <div>
+                    <label>Domain</label>
+                    <input type="text" id="t_domain">
+                    <label>Keywords</label>
+                    <input type="text" id="t_keywords">
+                </div>
+                <div>
+                    <label>Difficulty</label>
+                    <select id="t_difficulty"><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select>
+                    <label>Research Type</label>
+                    <select id="t_rtype"><option>Survey</option><option>Experimental</option><option>Review</option><option>Case Study</option><option>Comparative Analysis</option></select>
+                </div>
+            </div>
+            <button onclick="generateTopics()" id="btn_gentopics">✨ Generate 5 Topic Ideas <span class="spinner" id="spin_topics"></span></button>
+            <div id="topics_container" style="margin-top: 20px;"></div>
+        </div>
+
+        <div class="tab-content" id="tab2">
+            <h2>Upload Reference PDFs</h2>
+            <div class="card">
+                <input type="file" id="pdf_upload" multiple accept="application/pdf" style="margin-bottom: 10px;">
+                <button onclick="uploadPDFs()" id="btn_upload">Upload PDFs <span class="spinner" id="spin_upload"></span></button>
+            </div>
+            <h4>DOI Lookup</h4>
+            <div class="card" style="display: flex; gap: 10px;">
+                <input type="text" id="doi_input" placeholder="Enter DOI (e.g. 10.1000/xyz123)" style="margin-bottom: 0;">
+                <button onclick="lookupDOI()" id="btn_doi" style="white-space: nowrap;">Lookup DOI <span class="spinner" id="spin_doi"></span></button>
+            </div>
+            <h4>Reference Papers</h4>
+            <div id="papers_container"></div>
+        </div>
+
+        <div class="tab-content" id="tab3">
+            <h2>Literature Review</h2>
+            <button onclick="generateLitReview()" id="btn_lit">📝 Generate Literature Review <span class="spinner" id="spin_lit"></span></button>
+            <div style="margin-top: 20px;">
+                <textarea id="val_lit" onchange="updateState('literature_review', this.value)" style="height: 280px;"></textarea>
+            </div>
+            <h4>Comparison Table</h4>
+            <div id="lit_table_container" style="overflow-x:auto;"></div>
+        </div>
+
+        <div class="tab-content" id="tab4">
+            <h2>Outline</h2>
+            <button onclick="generateOutline()" id="btn_out">🗂️ Generate Outline <span class="spinner" id="spin_out"></span></button>
+            <textarea id="val_outline" onchange="updateState('outline', this.value)" style="height: 400px; margin-top:20px;"></textarea>
+        </div>
+
+        <div class="tab-content" id="tab5">
+            <h2>Introduction</h2>
+            <button onclick="generateIntro()" id="btn_intro">✍️ Generate Introduction <span class="spinner" id="spin_intro"></span></button>
+            <textarea id="val_intro" onchange="updateState('introduction', this.value)" style="height: 400px; margin-top:20px;"></textarea>
+        </div>
+
+        <div class="tab-content" id="tab6">
+            <h2>Methodology</h2>
+            <div class="card grid-2">
+                <div><label>Research Design</label><input type="text" id="m_design"></div>
+                <div><label>Dataset</label><input type="text" id="m_dataset"></div>
+                <div><label>Models</label><input type="text" id="m_models"></div>
+                <div><label>Evaluation Metrics</label><input type="text" id="m_metrics"></div>
+            </div>
+            <button onclick="generateMethodology()" id="btn_meth">⚙️ Generate Methodology <span class="spinner" id="spin_meth"></span></button>
+            <textarea id="val_meth" onchange="updateState('methodology', this.value)" style="height: 350px; margin-top:20px;"></textarea>
+        </div>
+
+        <div class="tab-content" id="tab7">
+            <h2>Experiments</h2>
+            <div class="card grid-2">
+                <div><label>Dataset</label><input type="text" id="e_dataset"></div>
+                <div><label>Models</label><input type="text" id="e_models"></div>
+                <div><label>Epochs</label><input type="text" id="e_epochs"></div>
+                <div><label>Optimizer</label><input type="text" id="e_optimizer"></div>
+                <div style="grid-column: 1 / -1;"><label>Training Details</label><textarea id="e_details" style="min-height:60px;"></textarea></div>
+            </div>
+            <button onclick="generateExperiments()" id="btn_exp">🧪 Generate Experiment Description <span class="spinner" id="spin_exp"></span></button>
+            <textarea id="val_exp" onchange="updateState('experiments', this.value)" style="height: 200px; margin-top:20px;"></textarea>
+            
+            <h4>Results Table</h4>
+            <div id="exp_table_container" style="overflow-x:auto;"></div>
+            <button onclick="addExpRow()" class="secondary" style="margin-bottom:20px;">+ Add Row</button>
+
+            <h4>Chart Generator</h4>
+            <div class="card grid-2" style="align-items: end;">
+                <div><label>Chart Type</label><select id="c_type"><option>Bar</option><option>Line</option><option>Pie</option></select></div>
+                <div><label>Metric</label><select id="c_metric"><option>Accuracy</option><option>Precision</option><option>Recall</option><option>F1</option></select></div>
+                <div style="grid-column: 1 / -1;"><button onclick="generateChart()" id="btn_chart">📊 Generate Chart <span class="spinner" id="spin_chart"></span></button></div>
+            </div>
+            <div id="chart_container" style="text-align:center;"></div>
+        </div>
+
+        <div class="tab-content" id="tab8">
+            <h2>Results & Discussion</h2>
+            <button onclick="generateResults()" id="btn_res">📊 Generate Results Discussion <span class="spinner" id="spin_res"></span></button>
+            <textarea id="val_res" onchange="updateState('results', this.value)" style="height: 350px; margin-top:20px;"></textarea>
+        </div>
+
+        <div class="tab-content" id="tab9">
+            <h2>Conclusion</h2>
+            <button onclick="generateConclusion()" id="btn_conc">🏁 Generate Conclusion <span class="spinner" id="spin_conc"></span></button>
+            <textarea id="val_conc" onchange="updateState('conclusion', this.value)" style="height: 300px; margin-top:20px;"></textarea>
+        </div>
+
+        <div class="tab-content" id="tab10">
+            <h2>Abstract</h2>
+            <p style="font-size:0.85rem; color:#666;">Generate this last, once other sections are complete.</p>
+            <button onclick="generateAbstract()" id="btn_abs">📌 Generate Abstract <span class="spinner" id="spin_abs"></span></button>
+            <textarea id="val_abs" onchange="updateState('abstract', this.value); updateWordCount()" style="height: 220px; margin-top:20px;"></textarea>
+            <div id="word_count" style="font-size:0.85rem; color:#666; margin-top:5px;"></div>
+        </div>
+
+        <div class="tab-content" id="tab11">
+            <h2>Export to LaTeX (Overleaf-ready)</h2>
+            <p>Paper Type: <strong id="lbl_journal">IEEE</strong> | Citation Style: <strong id="lbl_citation">IEEE</strong></p>
+            <div id="missing_warning" style="color:#d97706; background:#fef3c7; padding:10px; border-radius:6px; margin-bottom:15px; display:none;"></div>
+            <button onclick="exportZip()" id="btn_zip" style="font-size:1.1rem; padding:12px 24px;">📦 Build & Download Project ZIP <span class="spinner" id="spin_zip"></span></button>
+        </div>
+    </div>
+</div>
+
+<script>
+// --- STATE MANAGEMENT ---
+let appState = {
+    title: "", domain: "", keywords: [], research_type: "Survey",
+    journal: "IEEE", citation_style: "IEEE", authors: [], papers: [], topics: [], selected_topic: null,
+    outline: "", introduction: "", literature_review: "", lit_review_table: [],
+    methodology: "", experiments: "", exp_table: [{"Model": "", "Accuracy": 0.0, "Precision": 0.0, "Recall": 0.0, "F1": 0.0}],
+    results: "", conclusion: "", abstract: "", charts: []
+};
+
+function updateState(key, value) {
+    appState[key] = value;
+    syncUI();
+}
+
+// --- UI SYNC ---
+function syncUI() {
+    document.getElementById('p_title').value = appState.title;
+    document.getElementById('p_domain').value = appState.domain;
+    document.getElementById('p_keywords').value = appState.keywords.join(", ");
+    document.getElementById('p_rtype').value = appState.research_type;
+    document.getElementById('p_journal').value = appState.journal;
+    document.getElementById('p_citation').value = appState.citation_style;
+    
+    document.getElementById('t_domain').value = appState.domain;
+    document.getElementById('t_keywords').value = appState.keywords.join(", ");
+    
+    document.getElementById('val_outline').value = appState.outline;
+    document.getElementById('val_intro').value = appState.introduction;
+    document.getElementById('val_lit').value = appState.literature_review;
+    document.getElementById('val_meth').value = appState.methodology;
+    document.getElementById('val_exp').value = appState.experiments;
+    document.getElementById('val_res').value = appState.results;
+    document.getElementById('val_conc').value = appState.conclusion;
+    document.getElementById('val_abs').value = appState.abstract;
+
+    document.getElementById('lbl_journal').innerText = appState.journal;
+    document.getElementById('lbl_citation').innerText = appState.citation_style;
+
+    renderAuthors();
+    renderProgress();
+    renderTopics();
+    renderPapers();
+    renderLitTable();
+    renderExpTable();
+    updateWordCount();
+    checkMissingSections();
+}
+
+function switchTab(idx) {
+    document.querySelectorAll('.tab').forEach((t, i) => {
+        t.classList.toggle('active', i+1 === idx);
+    });
+    document.querySelectorAll('.tab-content').forEach((c, i) => {
+        c.classList.toggle('active', i+1 === idx);
+    });
+}
+
+// --- SIDEBAR ACTIONS ---
+function addAuthor() {
+    const name = document.getElementById('a_name').value.trim();
+    const aff = document.getElementById('a_aff').value.trim();
+    if(name) {
+        appState.authors.push({name: name, affiliation: aff});
+        document.getElementById('a_name').value = '';
+        document.getElementById('a_aff').value = '';
+        syncUI();
+    }
+}
+function removeAuthor(idx) {
+    appState.authors.splice(idx, 1);
+    syncUI();
+}
+function renderAuthors() {
+    const html = appState.authors.map((a, i) => 
+        `<div class="author-item"><span><strong>${a.name}</strong> - ${a.affiliation}</span>
+        <button onclick="removeAuthor(${i})">✕</button></div>`
+    ).join("");
+    document.getElementById('author_list').innerHTML = html;
+}
+
+function renderProgress() {
+    const sections = [
+        {k:'outline', l:'Outline'}, {k:'introduction', l:'Introduction'}, 
+        {k:'literature_review', l:'Lit. Review'}, {k:'methodology', l:'Methodology'},
+        {k:'experiments', l:'Experiments'}, {k:'results', l:'Results'},
+        {k:'conclusion', l:'Conclusion'}, {k:'abstract', l:'Abstract'}
+    ];
+    let done = 0;
+    let html = "";
+    sections.forEach(s => {
+        const isDone = !!appState[s.k];
+        if(isDone) done++;
+        html += `<div class="progress-item ${isDone ? 'done' : 'pending'}">${isDone ? '✅' : '⬜'} ${s.l}</div>`;
+    });
+    document.getElementById('progress_fill').style.width = `${(done/8)*100}%`;
+    document.getElementById('progress_text').innerText = `${done} / 8 sections complete`;
+    document.getElementById('progress_list').innerHTML = html;
+}
+
+// --- API FETCH HELPERS ---
+async function postAPI(endpoint, payload, btnId, spinId) {
+    const btn = document.getElementById(btnId);
+    const spin = document.getElementById(spinId);
+    btn.disabled = true; spin.style.display = 'inline-block';
+    try {
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const contentType = res.headers.get('content-type') || '';
+        const raw = await res.text();
+        let data = {};
+        if (raw) {
+            if (contentType.includes('application/json')) {
+                data = JSON.parse(raw);
+            } else {
+                data = { success: false, error: raw };
+            }
+        }
+        if (!res.ok && !data.error) {
+            data.error = `Request failed with status ${res.status}`;
+        }
+        return data;
+    } catch (e) {
+        alert("API Error: " + e.message);
+        return {success: false, error: e.message};
+    } finally {
+        btn.disabled = false; spin.style.display = 'none';
+    }
+}
+
+// --- TAB 1: TOPIC ---
+async function generateTopics() {
+    const payload = {
+        domain: document.getElementById('t_domain').value,
+        keywords: document.getElementById('t_keywords').value,
+        difficulty: document.getElementById('t_difficulty').value,
+        rtype: document.getElementById('t_rtype').value
+    };
+    if(!payload.domain) return alert("Domain required");
+    const res = await postAPI('/api/generate_topics', payload, 'btn_gentopics', 'spin_topics');
+    if(res.success && res.topics) {
+        appState.topics = res.topics;
+        syncUI();
+    } else alert(res.error || "Failed to generate topics");
+}
+function selectTopic(idx) {
+    appState.selected_topic = appState.topics[idx];
+    appState.title = appState.topics[idx].title;
+    syncUI();
+    alert("Topic selected & saved as Project Title!");
+}
+function renderTopics() {
+    const c = document.getElementById('topics_container');
+    if(!appState.topics || appState.topics.length === 0) { c.innerHTML = ""; return; }
+    
+    let html = appState.selected_topic ? `<div style="background:#eef1ff; color:#4f6df5; padding:10px; border-radius:8px; margin-bottom:15px; font-weight:bold;">✅ Selected: ${appState.selected_topic.title}</div>` : "";
+    
+    html += appState.topics.map((t, i) => `
+        <div class="card">
+            <h4 style="margin-top:0;">${t.title || 'Untitled'}</h4>
+            <p style="font-size:0.9rem;">${t.description || ''}</p>
+            <div><span class="pill">Novelty: ${t.novelty_score}/10</span> <span class="pill">Difficulty: ${t.difficulty_score}/10</span></div>
+            <p style="font-size:0.8rem; color:#666;"><strong>Gap:</strong> ${t.research_gap}</p>
+            <button class="secondary" onclick="selectTopic(${i})">Select this topic</button>
+        </div>
+    `).join("");
+    c.innerHTML = html;
+}
+
+// --- TAB 2: REFERENCES ---
+async function uploadPDFs() {
+    const files = document.getElementById('pdf_upload').files;
+    if(files.length === 0) return alert("Select PDFs first.");
+    const btn = document.getElementById('btn_upload');
+    const spin = document.getElementById('spin_upload');
+    btn.disabled = true; spin.style.display = 'inline-block';
+    
+    for(let i=0; i<files.length; i++) {
+        const formData = new FormData();
+        formData.append('file', files[i]);
+        try {
+            const res = await fetch('/api/extract_pdf', {method: 'POST', body: formData});
+            const data = await res.json();
+            if(data.success) {
+                // Prevent duplicate filenames
+                if(!appState.papers.find(p => p.filename === data.paper.filename)) {
+                    appState.papers.push(data.paper);
+                }
+            }
+        } catch(e) { console.error(e); }
+    }
+    btn.disabled = false; spin.style.display = 'none';
+    document.getElementById('pdf_upload').value = "";
+    syncUI();
+}
+async function lookupDOI() {
+    const doi = document.getElementById('doi_input').value;
+    if(!doi) return;
+    const res = await postAPI('/api/lookup_doi', {doi: doi}, 'btn_doi', 'spin_doi');
+    if(res.success && res.paper) {
+        appState.papers.push(res.paper);
+        document.getElementById('doi_input').value = "";
+        syncUI();
+    } else alert(res.error || "DOI not found");
+}
+function removePaper(idx) {
+    appState.papers.splice(idx, 1);
+    syncUI();
+}
+function renderPapers() {
+    const c = document.getElementById('papers_container');
+    if(appState.papers.length === 0) { c.innerHTML = "<p style='color:#666;'>No papers added yet.</p>"; return; }
+    c.innerHTML = appState.papers.map((p, i) => `
+        <div class="card" style="padding:15px;">
+            <div style="display:flex; justify-content:space-between;">
+                <strong>📄 ${p.title}</strong>
+                <button onclick="removePaper(${i})" style="background:transparent; color:#ff5c5c; padding:0; box-shadow:none;">✕ Remove</button>
+            </div>
+            <div style="font-size:0.85rem; margin-top:10px; color:#555;">
+                <div><strong>Authors:</strong> ${p.authors}</div>
+                <div><strong>Journal:</strong> ${p.journal} (${p.year})</div>
+            </div>
+        </div>
+    `).join("");
+}
+
+// --- TAB 3: LIT REVIEW ---
+async function generateLitReview() {
+    if(appState.papers.length === 0) return alert("Add reference papers first.");
+    const res = await postAPI('/api/generate_lit_review', {papers: appState.papers}, 'btn_lit', 'spin_lit');
+    if(res.success) {
+        appState.literature_review = res.literature_review;
+        if(res.lit_review_table && res.lit_review_table.length > 0) appState.lit_review_table = res.lit_review_table;
+        syncUI();
+    } else alert(res.error);
+}
+function renderLitTable() {
+    const c = document.getElementById('lit_table_container');
+    if(!appState.lit_review_table || appState.lit_review_table.length === 0) { c.innerHTML = ""; return; }
+    let html = `<table><tr><th>Paper</th><th>Method</th><th>Dataset</th><th>Result</th><th>Limitation</th></tr>`;
+    appState.lit_review_table.forEach((row, rIdx) => {
+        html += `<tr>`;
+        ['paper','method','dataset','result','limitation'].forEach(key => {
+            html += `<td><input type="text" value="${(row[key]||'').replace(/"/g, '&quot;')}" onchange="updateLitTableCell(${rIdx}, '${key}', this.value)"></td>`;
+        });
+        html += `</tr>`;
+    });
+    html += `</table>`;
+    c.innerHTML = html;
+}
+function updateLitTableCell(rIdx, key, val) { appState.lit_review_table[rIdx][key] = val; }
+
+// --- TABS 4-6, 8-10: GENERATORS ---
+async function generateOutline() {
+    const res = await postAPI('/api/generate_outline', appState, 'btn_out', 'spin_out');
+    if(res.success) { appState.outline = res.outline; syncUI(); }
+}
+async function generateIntro() {
+    const payload = {...appState, gap: appState.selected_topic ? appState.selected_topic.research_gap : ""};
+    const res = await postAPI('/api/generate_introduction', payload, 'btn_intro', 'spin_intro');
+    if(res.success) { appState.introduction = res.introduction; syncUI(); }
+}
+async function generateMethodology() {
+    const payload = {
+        m_design: document.getElementById('m_design').value, m_dataset: document.getElementById('m_dataset').value,
+        m_models: document.getElementById('m_models').value, m_metrics: document.getElementById('m_metrics').value
+    };
+    const res = await postAPI('/api/generate_methodology', payload, 'btn_meth', 'spin_meth');
+    if(res.success) { appState.methodology = res.methodology; syncUI(); }
+}
+
+// --- TAB 7: EXPERIMENTS ---
+async function generateExperiments() {
+    const payload = {
+        e_dataset: document.getElementById('e_dataset').value, e_models: document.getElementById('e_models').value,
+        e_epochs: document.getElementById('e_epochs').value, e_optimizer: document.getElementById('e_optimizer').value,
+        e_details: document.getElementById('e_details').value
+    };
+    const res = await postAPI('/api/generate_experiments', payload, 'btn_exp', 'spin_exp');
+    if(res.success) { appState.experiments = res.experiments; syncUI(); }
+}
+function renderExpTable() {
+    const c = document.getElementById('exp_table_container');
+    let html = `<table><tr><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>Action</th></tr>`;
+    appState.exp_table.forEach((row, rIdx) => {
+        html += `<tr>`;
+        ['Model','Accuracy','Precision','Recall','F1'].forEach(key => {
+            let type = key === 'Model' ? 'text' : 'number';
+            html += `<td><input type="${type}" step="0.01" value="${row[key]}" onchange="updateExpTableCell(${rIdx}, '${key}', this.value)"></td>`;
+        });
+        html += `<td><button onclick="removeExpRow(${rIdx})" style="background:transparent; color:red; padding:5px;">✕</button></td></tr>`;
+    });
+    html += `</table>`;
+    c.innerHTML = html;
+}
+function updateExpTableCell(rIdx, key, val) { 
+    appState.exp_table[rIdx][key] = key === 'Model' ? val : parseFloat(val) || 0; 
+}
+function addExpRow() {
+    appState.exp_table.push({"Model": "", "Accuracy": 0.0, "Precision": 0.0, "Recall": 0.0, "F1": 0.0});
+    syncUI();
+}
+function removeExpRow(idx) {
+    if(appState.exp_table.length > 1) { appState.exp_table.splice(idx, 1); syncUI(); }
+}
+async function generateChart() {
+    const payload = {
+        exp_table: appState.exp_table,
+        chart_type: document.getElementById('c_type').value,
+        metric: document.getElementById('c_metric').value
+    };
+    const res = await postAPI('/api/generate_chart', payload, 'btn_chart', 'spin_chart');
+    if(res.success && res.image) {
+        document.getElementById('chart_container').innerHTML = `
+            <img src="${res.image}" style="max-width:100%; border-radius:8px; border:1px solid #e2e5ee;">
+            <br><a href="${res.image}" download="${payload.metric}_${payload.chart_type}.png" style="display:inline-block; margin-top:10px; color:#4f6df5; text-decoration:none; font-weight:bold;">⬇️ Download Chart</a>
+        `;
+    } else alert(res.error || "Failed to generate chart");
+}
+
+// --- TABS 8-10 ---
+async function generateResults() {
+    const res = await postAPI('/api/generate_results', {exp_table: appState.exp_table}, 'btn_res', 'spin_res');
+    if(res.success) { appState.results = res.results; syncUI(); }
+}
+async function generateConclusion() {
+    const res = await postAPI('/api/generate_conclusion', appState, 'btn_conc', 'spin_conc');
+    if(res.success) { appState.conclusion = res.conclusion; syncUI(); }
+}
+async function generateAbstract() {
+    const res = await postAPI('/api/generate_abstract', appState, 'btn_abs', 'spin_abs');
+    if(res.success) { appState.abstract = res.abstract; syncUI(); }
+}
+function updateWordCount() {
+    const text = document.getElementById('val_abs').value.trim();
+    const wc = text ? text.split(/\s+/).length : 0;
+    const cc = text.length;
+    const wcDiv = document.getElementById('word_count');
+    wcDiv.innerText = `Word Count: ${wc} | Character Count: ${cc}`;
+    if(wc > 0 && (wc < 150 || wc > 250)) wcDiv.style.color = "#d97706"; // warning
+    else wcDiv.style.color = "#666";
+}
+
+// --- TAB 11: EXPORT ---
+function checkMissingSections() {
+    const keys = ["introduction", "literature_review", "methodology", "results", "conclusion", "abstract"];
+    const missing = keys.filter(k => !appState[k]);
+    const warn = document.getElementById('missing_warning');
+    if(missing.length > 0) {
+        warn.style.display = 'block';
+        warn.innerText = `⚠️ These sections are still empty: ${missing.join(", ")}. You can still export a partial draft.`;
+    } else {
+        warn.style.display = 'none';
+    }
+}
+async function exportZip() {
+    const btn = document.getElementById('btn_zip');
+    const spin = document.getElementById('spin_zip');
+    btn.disabled = true; spin.style.display = 'inline-block';
+    try {
+        const res = await fetch('/api/export_zip', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(appState)
+        });
+        if(!res.ok) throw new Error("Export failed");
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        const filename = (appState.title || "research_project").replace(/[^a-zA-Z0-9_-]/g, "_") + ".zip";
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+    } catch(e) { alert(e.message); }
+    finally { btn.disabled = false; spin.style.display = 'none'; }
+}
+
+// Init
+syncUI();
+</script>
+</body>
+</html>
